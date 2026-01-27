@@ -3,8 +3,7 @@ require("esbuild").build({
   bundle: true,
   platform: "node",
   target: "node18",
-  outfile: "dist/thumbnail",
-  banner: { js: "#!/usr/bin/env node" }
+  outfile: "dist/thumbnail"
 }).then(() => {
   require("fs").chmodSync("dist/thumbnail", 0o755);
 });

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-#!/usr/bin/env node
 
 // bin/thumbnail.js
 var fs = require("fs");
