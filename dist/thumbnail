@@ -4,88 +4,109 @@
 var fs = require("fs");
 var path = require("path");
 var { execSync } = require("child_process");
+function die(msg) {
+  console.error("\u274C", msg);
+  process.exit(1);
+}
+function run(cmd) {
+  execSync(cmd, { stdio: "inherit" });
+}
 function checkVips() {
   try {
     execSync("vips -l", { stdio: "ignore" });
   } catch {
-    console.error("\u274C libvips not found");
-    console.error("\u{1F449} install it with: brew install vips");
-    process.exit(1);
+    die("libvips \u672A\u5B89\u88C5\uFF0C\u8BF7\u5148\u6267\u884C\uFF1Abrew install vips");
   }
 }
 function help() {
   console.log(`
-thumbnail - batch compress images using libvips
+thumbnail - batch image compressor (libvips)
 
 Usage:
   thumbnail <sourceDir> <outputDir> [options]
 
 Options:
-  --quality <1-100>     Compression quality (default: 85)
-  --size <number>       Resize max side (optional)
-  --ext <.jpg|.png>     Output format (optional)
-  --recursive           Scan subdirectories
-  -h, --help            Show help
+  --quality <1-100>     \u538B\u7F29\u8D28\u91CF\uFF08\u9ED8\u8BA4 85\uFF0C\u4EC5\u5BF9 JPG \u6709\u6548\uFF09
+  --size <number>       \u6700\u957F\u8FB9\u5C3A\u5BF8\uFF08\u4E0D\u4F20\u5219\u4FDD\u6301\u539F\u5C3A\u5BF8\uFF09
+  --ext <.jpg|.png>     \u8F93\u51FA\u683C\u5F0F\uFF08\u53EF\u9009\uFF09
+  --recursive           \u9012\u5F52\u5904\u7406\u5B50\u76EE\u5F55
+  -h, --help            \u663E\u793A\u5E2E\u52A9
 
 Examples:
   thumbnail ./images ./out --quality 80
   thumbnail ./images ./out --size 400 --quality 80
 `);
 }
-var args = process.argv.slice(2);
-if (args.length < 2 || args.includes("-h") || args.includes("--help")) {
+var argv = process.argv.slice(2);
+if (argv.length < 2 || argv.includes("-h") || argv.includes("--help")) {
   help();
   process.exit(0);
 }
 checkVips();
-var src = path.resolve(args[0]);
-var out = path.resolve(args[1]);
+var srcDir = path.resolve(argv[0]);
+var outDir = path.resolve(argv[1]);
+if (!fs.existsSync(srcDir))
+  die("\u6E90\u76EE\u5F55\u4E0D\u5B58\u5728");
 var quality = 85;
 var size = null;
-var ext = "";
+var ext = null;
 var recursive = false;
-args.forEach((a, i) => {
-  if (a === "--quality") {
-    const q = Number(args[i + 1]);
-    if (q >= 1 && q <= 100)
-      quality = q;
-  }
-  if (a === "--size")
-    size = Number(args[i + 1]) || null;
-  if (a === "--ext")
-    ext = args[i + 1] || "";
-  if (a === "--recursive")
+for (let i = 2; i < argv.length; i++) {
+  const a = argv[i];
+  if (a === "--quality")
+    quality = Number(argv[++i]) || quality;
+  else if (a === "--size")
+    size = Number(argv[++i]) || null;
+  else if (a === "--ext")
+    ext = argv[++i];
+  else if (a === "--recursive")
     recursive = true;
-});
+}
 function walk(dir) {
-  let files = [];
+  let list = [];
   for (const f of fs.readdirSync(dir)) {
     const p = path.join(dir, f);
     const s = fs.statSync(p);
-    if (s.isDirectory() && recursive)
-      files.push(...walk(p));
-    if (s.isFile())
-      files.push(p);
+    if (s.isDirectory() && recursive) {
+      list = list.concat(walk(p));
+    } else if (s.isFile()) {
+      list.push(p);
+    }
   }
-  return files;
+  return list;
 }
-fs.mkdirSync(out, { recursive: true });
-var images = walk(src).filter(
-  (f) => [".jpg", ".jpeg", ".png"].includes(path.extname(f).toLowerCase())
-);
+function isImage(file) {
+  return [".jpg", ".jpeg", ".png"].includes(
+    path.extname(file).toLowerCase()
+  );
+}
+function processImage(input, output) {
+  const tmp = output + ".v";
+  const outExt = path.extname(output).toLowerCase();
+  if (size) {
+    run(`vips thumbnail "${input}" "${tmp}" ${size}`);
+  } else {
+    run(`vips resize "${input}" "${tmp}" 1`);
+  }
+  if (outExt === ".jpg" || outExt === ".jpeg") {
+    run(`vips jpegsave "${tmp}" "${output}" --Q=${quality} --strip`);
+  } else if (outExt === ".png") {
+    run(`vips pngsave "${tmp}" "${output}" --compression=9`);
+  } else {
+    die(`\u4E0D\u652F\u6301\u7684\u8F93\u51FA\u683C\u5F0F\uFF1A${outExt}`);
+  }
+  fs.unlinkSync(tmp);
+}
+fs.mkdirSync(outDir, { recursive: true });
+var images = walk(srcDir).filter(isImage);
 if (!images.length) {
-  console.log("\u26A0\uFE0F no images found");
+  console.log("\u26A0\uFE0F \u672A\u627E\u5230\u56FE\u7247");
   process.exit(0);
 }
 images.forEach((img) => {
-  const inputExt = path.extname(img).toLowerCase();
-  const outputExt = (ext || inputExt).toLowerCase();
-  const output = path.join(out, path.basename(img, inputExt) + outputExt);
-  const targetSize = size || 1e5;
-  let cmd = `vips thumbnail "${img}" "${output}" ${targetSize}`;
-  if (outputExt === ".jpg" || outputExt === ".jpeg") {
-    cmd += ` --Q=${quality}`;
-  }
-  execSync(cmd, { stdio: "inherit" });
+  const base = path.basename(img, path.extname(img));
+  const outExt = ext || path.extname(img);
+  const output = path.join(outDir, base + outExt);
+  processImage(img, output);
 });
-console.log(`\u2705 processed ${images.length} images`);
+console.log(`\u2705 \u5904\u7406\u5B8C\u6210\uFF0C\u5171 ${images.length} \u5F20\u56FE\u7247`);
