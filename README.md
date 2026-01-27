@@ -1,9 +1,9 @@
-# thumbnail
+# vips-thumbnail
 
-Fast batch image thumbnail generator using libvips.
+Fast batch image thumbnail generator based on **libvips**.
 
 ## Install
 
 ```bash
-brew tap giszhc/thumbnail
+brew tap giszhc/vips-thumbnail
 brew install thumbnail

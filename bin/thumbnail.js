@@ -3,29 +3,29 @@
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
-const os = require("os");
 
-function hasVips() {
+function checkVips() {
   try {
     execSync("vips -l", { stdio: "ignore" });
-    return true;
   } catch {
-    return false;
+    console.error("❌ libvips not found");
+    console.error("👉 install it with: brew install vips");
+    process.exit(1);
   }
 }
 
 function help() {
   console.log(`
-thumbnail - batch generate image thumbnails
+thumbnail - batch generate image thumbnails using libvips
 
 Usage:
   thumbnail <sourceDir> <outputDir> [options]
 
 Options:
-  --size <number>     Thumbnail size (default: 400)
-  --ext <.png|.jpg>   Output extension
-  --recursive         Scan subdirectories
-  -h, --help          Show help
+  --size <number>        Thumbnail size (default: 400)
+  --ext <.png|.jpg>      Output extension
+  --recursive            Scan subdirectories
+  -h, --help             Show help
 
 Example:
   thumbnail ./images ./out --size 300 --recursive
@@ -38,11 +38,7 @@ if (args.length < 2 || args.includes("-h") || args.includes("--help")) {
   process.exit(0);
 }
 
-if (!hasVips()) {
-  console.error("❌ libvips not found");
-  console.error("👉 install: brew install vips");
-  process.exit(1);
-}
+checkVips();
 
 const src = path.resolve(args[0]);
 const out = path.resolve(args[1]);
@@ -61,9 +57,9 @@ function walk(dir) {
   let files = [];
   for (const f of fs.readdirSync(dir)) {
     const p = path.join(dir, f);
-    const stat = fs.statSync(p);
-    if (stat.isDirectory() && recursive) files.push(...walk(p));
-    if (stat.isFile()) files.push(p);
+    const s = fs.statSync(p);
+    if (s.isDirectory() && recursive) files.push(...walk(p));
+    if (s.isFile()) files.push(p);
   }
   return files;
 }
@@ -74,7 +70,7 @@ const images = walk(src).filter(f =>
   [".png", ".jpg", ".jpeg"].includes(path.extname(f).toLowerCase())
 );
 
-if (images.length === 0) {
+if (!images.length) {
   console.log("⚠️ no images found");
   process.exit(0);
 }
@@ -82,7 +78,7 @@ if (images.length === 0) {
 images.forEach(img => {
   const e = path.extname(img);
   const o = path.join(out, path.basename(img, e) + (ext || e));
-  execSync(`vips thumbnail "${img}" "${o}" ${size}`);
+  execSync(`vips thumbnail "${img}" "${o}" ${size}`, { stdio: "inherit" });
 });
 
 console.log(`✅ generated ${images.length} thumbnails`);
