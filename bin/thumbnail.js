@@ -51,7 +51,10 @@ let ext = "";
 let recursive = false;
 
 args.forEach((a, i) => {
-  if (a === "--quality") quality = Math.min(100, Math.max(1, Number(args[i + 1]) || 85));
+  if (a === "--quality") {
+    const q = Number(args[i + 1]);
+    if (q >= 1 && q <= 100) quality = q;
+  }
   if (a === "--size") size = Number(args[i + 1]) || null;
   if (a === "--ext") ext = args[i + 1] || "";
   if (a === "--recursive") recursive = true;
@@ -80,18 +83,17 @@ if (!images.length) {
 }
 
 images.forEach(img => {
-  const inputExt = path.extname(img);
-  const outputExt = ext || inputExt;
+  const inputExt = path.extname(img).toLowerCase();
+  const outputExt = (ext || inputExt).toLowerCase();
   const output = path.join(out, path.basename(img, inputExt) + outputExt);
 
-  let cmd;
+  // 不指定 size：用一个极大的尺寸，保证不缩放
+  const targetSize = size || 100000;
 
-  if (size) {
-    // resize + compress
-    cmd = `vips thumbnail "${img}" "${output}" ${size} -Q ${quality}`;
-  } else {
-    // keep original size, compress only
-    cmd = `vips copy "${img}" "${output}" -Q ${quality}`;
+  let cmd = `vips thumbnail "${img}" "${output}" ${targetSize}`;
+
+  if (outputExt === ".jpg" || outputExt === ".jpeg") {
+    cmd += ` --Q=${quality}`;
   }
 
   execSync(cmd, { stdio: "inherit" });

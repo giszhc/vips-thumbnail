@@ -45,8 +45,11 @@ var size = null;
 var ext = "";
 var recursive = false;
 args.forEach((a, i) => {
-  if (a === "--quality")
-    quality = Math.min(100, Math.max(1, Number(args[i + 1]) || 85));
+  if (a === "--quality") {
+    const q = Number(args[i + 1]);
+    if (q >= 1 && q <= 100)
+      quality = q;
+  }
   if (a === "--size")
     size = Number(args[i + 1]) || null;
   if (a === "--ext")
@@ -75,14 +78,13 @@ if (!images.length) {
   process.exit(0);
 }
 images.forEach((img) => {
-  const inputExt = path.extname(img);
-  const outputExt = ext || inputExt;
+  const inputExt = path.extname(img).toLowerCase();
+  const outputExt = (ext || inputExt).toLowerCase();
   const output = path.join(out, path.basename(img, inputExt) + outputExt);
-  let cmd;
-  if (size) {
-    cmd = `vips thumbnail "${img}" "${output}" ${size} -Q ${quality}`;
-  } else {
-    cmd = `vips copy "${img}" "${output}" -Q ${quality}`;
+  const targetSize = size || 1e5;
+  let cmd = `vips thumbnail "${img}" "${output}" ${targetSize}`;
+  if (outputExt === ".jpg" || outputExt === ".jpeg") {
+    cmd += ` --Q=${quality}`;
   }
   execSync(cmd, { stdio: "inherit" });
 });
