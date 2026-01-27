@@ -16,19 +16,21 @@ function checkVips() {
 
 function help() {
   console.log(`
-thumbnail - batch generate image thumbnails using libvips
+thumbnail - batch compress images using libvips
 
 Usage:
   thumbnail <sourceDir> <outputDir> [options]
 
 Options:
-  --size <number>        Thumbnail size (default: 400)
-  --ext <.png|.jpg>      Output extension
-  --recursive            Scan subdirectories
-  -h, --help             Show help
+  --quality <1-100>     Compression quality (default: 85)
+  --size <number>       Resize max side (optional)
+  --ext <.jpg|.png>     Output format (optional)
+  --recursive           Scan subdirectories
+  -h, --help            Show help
 
-Example:
-  thumbnail ./images ./out --size 300 --recursive
+Examples:
+  thumbnail ./images ./out --quality 80
+  thumbnail ./images ./out --size 400 --quality 80
 `);
 }
 
@@ -43,12 +45,14 @@ checkVips();
 const src = path.resolve(args[0]);
 const out = path.resolve(args[1]);
 
-let size = 400;
+let quality = 85;
+let size = null;
 let ext = "";
 let recursive = false;
 
 args.forEach((a, i) => {
-  if (a === "--size") size = Number(args[i + 1]) || size;
+  if (a === "--quality") quality = Math.min(100, Math.max(1, Number(args[i + 1]) || 85));
+  if (a === "--size") size = Number(args[i + 1]) || null;
   if (a === "--ext") ext = args[i + 1] || "";
   if (a === "--recursive") recursive = true;
 });
@@ -67,7 +71,7 @@ function walk(dir) {
 fs.mkdirSync(out, { recursive: true });
 
 const images = walk(src).filter(f =>
-  [".png", ".jpg", ".jpeg"].includes(path.extname(f).toLowerCase())
+  [".jpg", ".jpeg", ".png"].includes(path.extname(f).toLowerCase())
 );
 
 if (!images.length) {
@@ -76,9 +80,21 @@ if (!images.length) {
 }
 
 images.forEach(img => {
-  const e = path.extname(img);
-  const o = path.join(out, path.basename(img, e) + (ext || e));
-  execSync(`vips thumbnail "${img}" "${o}" ${size}`, { stdio: "inherit" });
+  const inputExt = path.extname(img);
+  const outputExt = ext || inputExt;
+  const output = path.join(out, path.basename(img, inputExt) + outputExt);
+
+  let cmd;
+
+  if (size) {
+    // resize + compress
+    cmd = `vips thumbnail "${img}" "${output}" ${size} -Q ${quality}`;
+  } else {
+    // keep original size, compress only
+    cmd = `vips copy "${img}" "${output}" -Q ${quality}`;
+  }
+
+  execSync(cmd, { stdio: "inherit" });
 });
 
-console.log(`✅ generated ${images.length} thumbnails`);
+console.log(`✅ processed ${images.length} images`);
