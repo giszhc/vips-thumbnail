@@ -1,32 +1,50 @@
 #!/usr/bin/env node
 
+/**
+ * thumbnail
+ * 使用 libvips 批量压缩 / 生成缩略图
+ *
+ * 规则：
+ * - 不传 --size：不改尺寸，只压缩
+ * - 传 --size：最长边 resize
+ * - JPG/JPEG：jpegsave --Q
+ * - PNG：pngsave --compression
+ */
+
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+
+function die(msg) {
+  console.error("❌", msg);
+  process.exit(1);
+}
+
+function run(cmd) {
+  execSync(cmd, { stdio: "inherit" });
+}
 
 function checkVips() {
   try {
     execSync("vips -l", { stdio: "ignore" });
   } catch {
-    console.error("❌ libvips not found");
-    console.error("👉 install it with: brew install vips");
-    process.exit(1);
+    die("libvips 未安装，请先执行：brew install vips");
   }
 }
 
 function help() {
   console.log(`
-thumbnail - batch compress images using libvips
+thumbnail - batch image compressor (libvips)
 
 Usage:
   thumbnail <sourceDir> <outputDir> [options]
 
 Options:
-  --quality <1-100>     Compression quality (default: 85)
-  --size <number>       Resize max side (optional)
-  --ext <.jpg|.png>     Output format (optional)
-  --recursive           Scan subdirectories
-  -h, --help            Show help
+  --quality <1-100>     压缩质量（默认 85，仅对 JPG 有效）
+  --size <number>       最长边尺寸（不传则保持原尺寸）
+  --ext <.jpg|.png>     输出格式（可选）
+  --recursive           递归处理子目录
+  -h, --help            显示帮助
 
 Examples:
   thumbnail ./images ./out --quality 80
@@ -34,69 +52,91 @@ Examples:
 `);
 }
 
-const args = process.argv.slice(2);
-if (args.length < 2 || args.includes("-h") || args.includes("--help")) {
+const argv = process.argv.slice(2);
+if (argv.length < 2 || argv.includes("-h") || argv.includes("--help")) {
   help();
   process.exit(0);
 }
 
 checkVips();
 
-const src = path.resolve(args[0]);
-const out = path.resolve(args[1]);
+const srcDir = path.resolve(argv[0]);
+const outDir = path.resolve(argv[1]);
+
+if (!fs.existsSync(srcDir)) die("源目录不存在");
 
 let quality = 85;
 let size = null;
-let ext = "";
+let ext = null;
 let recursive = false;
 
-args.forEach((a, i) => {
-  if (a === "--quality") {
-    const q = Number(args[i + 1]);
-    if (q >= 1 && q <= 100) quality = q;
-  }
-  if (a === "--size") size = Number(args[i + 1]) || null;
-  if (a === "--ext") ext = args[i + 1] || "";
-  if (a === "--recursive") recursive = true;
-});
+for (let i = 2; i < argv.length; i++) {
+  const a = argv[i];
+  if (a === "--quality") quality = Number(argv[++i]) || quality;
+  else if (a === "--size") size = Number(argv[++i]) || null;
+  else if (a === "--ext") ext = argv[++i];
+  else if (a === "--recursive") recursive = true;
+}
 
 function walk(dir) {
-  let files = [];
+  let list = [];
   for (const f of fs.readdirSync(dir)) {
     const p = path.join(dir, f);
     const s = fs.statSync(p);
-    if (s.isDirectory() && recursive) files.push(...walk(p));
-    if (s.isFile()) files.push(p);
+    if (s.isDirectory() && recursive) {
+      list = list.concat(walk(p));
+    } else if (s.isFile()) {
+      list.push(p);
+    }
   }
-  return files;
+  return list;
 }
 
-fs.mkdirSync(out, { recursive: true });
+function isImage(file) {
+  return [".jpg", ".jpeg", ".png"].includes(
+    path.extname(file).toLowerCase()
+  );
+}
 
-const images = walk(src).filter(f =>
-  [".jpg", ".jpeg", ".png"].includes(path.extname(f).toLowerCase())
-);
+function processImage(input, output) {
+  const tmp = output + ".v";
+  const outExt = path.extname(output).toLowerCase();
+
+  // 1️⃣ 处理阶段
+  if (size) {
+    // 按最长边 resize
+    run(`vips thumbnail "${input}" "${tmp}" ${size}`);
+  } else {
+    // 不改尺寸
+    run(`vips resize "${input}" "${tmp}" 1`);
+  }
+
+  // 2️⃣ 保存阶段（压缩参数只在这里）
+  if (outExt === ".jpg" || outExt === ".jpeg") {
+    run(`vips jpegsave "${tmp}" "${output}" --Q=${quality} --strip`);
+  } else if (outExt === ".png") {
+    run(`vips pngsave "${tmp}" "${output}" --compression=9`);
+  } else {
+    die(`不支持的输出格式：${outExt}`);
+  }
+
+  fs.unlinkSync(tmp);
+}
+
+fs.mkdirSync(outDir, { recursive: true });
+
+const images = walk(srcDir).filter(isImage);
 
 if (!images.length) {
-  console.log("⚠️ no images found");
+  console.log("⚠️ 未找到图片");
   process.exit(0);
 }
 
 images.forEach(img => {
-  const inputExt = path.extname(img).toLowerCase();
-  const outputExt = (ext || inputExt).toLowerCase();
-  const output = path.join(out, path.basename(img, inputExt) + outputExt);
-
-  // 不指定 size：用一个极大的尺寸，保证不缩放
-  const targetSize = size || 100000;
-
-  let cmd = `vips thumbnail "${img}" "${output}" ${targetSize}`;
-
-  if (outputExt === ".jpg" || outputExt === ".jpeg") {
-    cmd += ` --Q=${quality}`;
-  }
-
-  execSync(cmd, { stdio: "inherit" });
+  const base = path.basename(img, path.extname(img));
+  const outExt = ext || path.extname(img);
+  const output = path.join(outDir, base + outExt);
+  processImage(img, output);
 });
 
-console.log(`✅ processed ${images.length} images`);
+console.log(`✅ 处理完成，共 ${images.length} 张图片`);
