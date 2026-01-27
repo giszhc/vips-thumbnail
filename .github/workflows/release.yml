@@ -1,0 +1,56 @@
+name: Release & Update Homebrew
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install deps
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+      - name: Compute sha256
+        id: sha
+        run: |
+          url="https://github.com/giszhc/vips-thumbnail/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz"
+          curl -L "$url" -o src.tar.gz
+          echo "sha256=$(shasum -a 256 src.tar.gz | cut -d ' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Checkout tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: giszhc/homebrew-vips-thumbnail
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Update formula
+        run: |
+          sed -i.bak \
+            -e "s|url \".*\"|url \"https://github.com/giszhc/vips-thumbnail/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz\"|" \
+            -e "s|sha256 \".*\"|sha256 \"${{ steps.sha.outputs.sha256 }}\"|" \
+            tap/Formula/thumbnail.rb
+          rm tap/Formula/thumbnail.rb.bak
+
+      - name: Commit & push tap
+        run: |
+          cd tap
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add Formula/thumbnail.rb
+          git commit -m "thumbnail ${GITHUB_REF_NAME}"
+          git push
