@@ -18,12 +18,21 @@ function checkVips() {
     die("libvips \u672A\u5B89\u88C5\uFF0C\u8BF7\u5148\u6267\u884C\uFF1Abrew install vips");
   }
 }
+function isImage(file) {
+  return [".jpg", ".jpeg", ".png"].includes(
+    path.extname(file).toLowerCase()
+  );
+}
 function help() {
   console.log(`
 thumbnail - batch image compressor (libvips)
 
 Usage:
-  thumbnail <sourceDir> <outputDir> [options]
+  thumbnail <source> <output> [options]
+
+Description:
+  Compress images using libvips.
+  Supports single image or directory as source.
 
 Options:
   --quality <1-100>     \u538B\u7F29\u8D28\u91CF\uFF08\u9ED8\u8BA4 85\uFF0C\u4EC5\u5BF9 JPG \u6709\u6548\uFF09
@@ -33,8 +42,22 @@ Options:
   -h, --help            \u663E\u793A\u5E2E\u52A9
 
 Examples:
+
+  # \u5355\u56FE\u7247\u538B\u7F29\uFF08\u8F93\u51FA\u5230\u76EE\u5F55\uFF09
+  thumbnail a.png out --quality 80
+
+  # \u5355\u56FE\u7247\u538B\u7F29\uFF08\u6307\u5B9A\u8F93\u51FA\u6587\u4EF6\uFF09
+  thumbnail a.png out.jpg --quality 80
+
+  # \u6279\u91CF\u538B\u7F29\u76EE\u5F55
   thumbnail ./images ./out --quality 80
+
+  # \u6279\u91CF\u751F\u6210\u7F29\u7565\u56FE
   thumbnail ./images ./out --size 400 --quality 80
+
+Notes:
+  - \u4E0D\u4F20 --size \u65F6\uFF0C\u53EA\u538B\u7F29\u4E0D\u6539\u53D8\u5C3A\u5BF8
+  - PNG \u5728\u4E0D resize \u65F6\u4F1A\u4FDD\u6301\u539F\u6837\uFF0C\u907F\u514D\u4F53\u79EF\u53D8\u5927
 `);
 }
 var argv = process.argv.slice(2);
@@ -43,10 +66,10 @@ if (argv.length < 2 || argv.includes("-h") || argv.includes("--help")) {
   process.exit(0);
 }
 checkVips();
-var srcDir = path.resolve(argv[0]);
-var outDir = path.resolve(argv[1]);
-if (!fs.existsSync(srcDir))
-  die("\u6E90\u76EE\u5F55\u4E0D\u5B58\u5728");
+var srcPath = path.resolve(argv[0]);
+var outPath = path.resolve(argv[1]);
+if (!fs.existsSync(srcPath))
+  die("\u6E90\u8DEF\u5F84\u4E0D\u5B58\u5728");
 var quality = 85;
 var size = null;
 var ext = null;
@@ -62,6 +85,28 @@ for (let i = 2; i < argv.length; i++) {
   else if (a === "--recursive")
     recursive = true;
 }
+function processImage(input, output) {
+  const outExt = path.extname(output).toLowerCase();
+  if (!size && outExt === ".png") {
+    fs.copyFileSync(input, output);
+    return;
+  }
+  const tmp = output + ".v";
+  if (size) {
+    run(`vips thumbnail "${input}" "${tmp}" ${size}`);
+  } else {
+    run(`vips resize "${input}" "${tmp}" 1`);
+  }
+  if (outExt === ".jpg" || outExt === ".jpeg") {
+    run(`vips jpegsave "${tmp}" "${output}" --Q=${quality} --strip`);
+  } else if (outExt === ".png") {
+    run(`vips pngsave "${tmp}" "${output}" --compression=9`);
+  } else {
+    fs.unlinkSync(tmp);
+    die(`\u4E0D\u652F\u6301\u7684\u8F93\u51FA\u683C\u5F0F\uFF1A${outExt}`);
+  }
+  fs.unlinkSync(tmp);
+}
 function walk(dir) {
   let list = [];
   for (const f of fs.readdirSync(dir)) {
@@ -75,30 +120,28 @@ function walk(dir) {
   }
   return list;
 }
-function isImage(file) {
-  return [".jpg", ".jpeg", ".png"].includes(
-    path.extname(file).toLowerCase()
-  );
-}
-function processImage(input, output) {
-  const tmp = output + ".v";
-  const outExt = path.extname(output).toLowerCase();
-  if (size) {
-    run(`vips thumbnail "${input}" "${tmp}" ${size}`);
+var srcStat = fs.statSync(srcPath);
+if (srcStat.isFile()) {
+  if (!isImage(srcPath))
+    die("\u6682\u4E0D\u652F\u6301\u8BE5\u6587\u4EF6\u7C7B\u578B");
+  let output;
+  if (fs.existsSync(outPath) && fs.statSync(outPath).isDirectory()) {
+    const base = path.basename(srcPath, path.extname(srcPath));
+    const outExt = ext || path.extname(srcPath);
+    output = path.join(outPath, base + outExt);
   } else {
-    run(`vips resize "${input}" "${tmp}" 1`);
+    output = outPath;
   }
-  if (outExt === ".jpg" || outExt === ".jpeg") {
-    run(`vips jpegsave "${tmp}" "${output}" --Q=${quality} --strip`);
-  } else if (outExt === ".png") {
-    run(`vips pngsave "${tmp}" "${output}" --compression=9`);
-  } else {
-    die(`\u4E0D\u652F\u6301\u7684\u8F93\u51FA\u683C\u5F0F\uFF1A${outExt}`);
-  }
-  fs.unlinkSync(tmp);
+  fs.mkdirSync(path.dirname(output), { recursive: true });
+  processImage(srcPath, output);
+  console.log("\u2705 \u5355\u56FE\u7247\u5904\u7406\u5B8C\u6210");
+  process.exit(0);
 }
-fs.mkdirSync(outDir, { recursive: true });
-var images = walk(srcDir).filter(isImage);
+if (!srcStat.isDirectory()) {
+  die("\u6E90\u8DEF\u5F84\u65E2\u4E0D\u662F\u6587\u4EF6\u4E5F\u4E0D\u662F\u76EE\u5F55");
+}
+fs.mkdirSync(outPath, { recursive: true });
+var images = walk(srcPath).filter(isImage);
 if (!images.length) {
   console.log("\u26A0\uFE0F \u672A\u627E\u5230\u56FE\u7247");
   process.exit(0);
@@ -106,7 +149,7 @@ if (!images.length) {
 images.forEach((img) => {
   const base = path.basename(img, path.extname(img));
   const outExt = ext || path.extname(img);
-  const output = path.join(outDir, base + outExt);
+  const output = path.join(outPath, base + outExt);
   processImage(img, output);
 });
-console.log(`\u2705 \u5904\u7406\u5B8C\u6210\uFF0C\u5171 ${images.length} \u5F20\u56FE\u7247`);
+console.log(`\u2705 \u6279\u91CF\u5904\u7406\u5B8C\u6210\uFF0C\u5171 ${images.length} \u5F20\u56FE\u7247`);
