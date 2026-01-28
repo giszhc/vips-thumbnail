@@ -50,6 +50,10 @@ thumbnail - batch image compressor (libvips)
 Usage:
   thumbnail <source> <output> [options]
 
+Description:
+  Compress images using libvips.
+  Supports single image or directory as source.
+
 Options:
   --quality <1-100>     压缩质量（默认 85，仅对 JPG 有效）
   --size <number>       最长边尺寸（不传则保持原尺寸）
@@ -58,15 +62,25 @@ Options:
   -h, --help            显示帮助
 
 Examples:
-  # 单图片
+
+  # 单图片压缩（输出到目录）
   thumbnail a.png out --quality 80
+
+  # 单图片压缩（指定输出文件）
   thumbnail a.png out.jpg --quality 80
 
-  # 批量
+  # 批量压缩目录
   thumbnail ./images ./out --quality 80
+
+  # 批量生成缩略图
   thumbnail ./images ./out --size 400 --quality 80
+
+Notes:
+  - 不传 --size 时，只压缩不改变尺寸
+  - PNG 在不 resize 时会保持原样，避免体积变大
 `);
 }
+
 
 /* ---------------- args ---------------- */
 
