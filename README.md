@@ -21,6 +21,16 @@
 
 > 需要已安装 Homebrew
 
+### Homebrew安装
+
+Homebrew 安装建议开启代理，不然可能安装失败。
+
+复制下面命令后在终端执行回车即可：
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
+```
+
 ### 1️⃣ 添加 tap
 
 ```bash
