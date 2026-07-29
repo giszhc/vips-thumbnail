@@ -12,8 +12,9 @@
   ],
   "scripts": {
     "build": "node build.js",
-    "test": "node --check bin/thumbnail.js && npm run build && node dist/thumbnail --help",
-    "prepack": "npm run build"
+    "build:cli": "node build.js",
+    "test": "node --check bin/thumbnail.js && node build.js && node dist/thumbnail --help && pnpm --filter @giszhc/vips-thumbnail-core test",
+    "prepack": "node build.js"
   },
   "engines": {
     "node": ">=18"
@@ -36,7 +37,8 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
-    "esbuild": "^0.20.0"
+    "@giszhc/vips-thumbnail-core": "workspace:*",
+    "esbuild": "^0.28.1"
   },
   "license": "MIT"
 }
