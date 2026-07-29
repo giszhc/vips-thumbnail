@@ -15,14 +15,14 @@
 需要 Node.js 18 或更高版本：
 
 ```bash
-npm install --global vips-thumbnail
+npm install --global @giszhc/vips-thumbnail
 thumbnail --help
 ```
 
 也可以不全局安装，直接运行：
 
 ```bash
-npx vips-thumbnail --help
+npx @giszhc/vips-thumbnail --help
 ```
 
 ### libvips 依赖

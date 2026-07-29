@@ -1,5 +1,5 @@
 {
-  "name": "vips-thumbnail",
+  "name": "@giszhc/vips-thumbnail",
   "version": "0.2.3",
   "description": "基于 libvips 的图片压缩和缩略图命令行工具",
   "bin": {
