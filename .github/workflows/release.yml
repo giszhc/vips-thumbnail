@@ -1,9 +1,13 @@
-name: Release & Update Homebrew
+name: Release npm & Update Homebrew
 
 on:
   push:
     tags:
       - "v*"
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   release:
@@ -13,16 +17,47 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
 
-      - name: Install deps
-        run: npm install
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: npm run build
+      - name: Test
+        run: pnpm test
+
+      - name: Verify tag version
+        shell: bash
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          test "${GITHUB_REF_NAME}" = "v${package_version}"
+
+      - name: Check npm version
+        id: npm-version
+        shell: bash
+        run: |
+          package_name="$(node -p "require('./package.json').name")"
+          package_version="$(node -p "require('./package.json').version")"
+          if npm view "${package_name}@${package_version}" version --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish npm package
+        if: steps.npm-version.outputs.publish == 'true'
+        run: pnpm publish --no-git-checks --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Compute sha256
         id: sha

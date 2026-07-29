@@ -1,137 +1,111 @@
 # vips-thumbnail
 
-一个基于 **libvips** 的命令行工具，用于**批量压缩图片**，也可以按需生成缩略图。
+一个基于 **libvips** 的图片压缩和缩略图命令行工具，支持单图片和批量处理 JPG / PNG。
 
-特点是：**快、简单、对新手友好**。
+## 功能
 
----
+- 默认只压缩，不改变图片尺寸
+- 可按最长边生成缩略图
+- 支持单文件、目录和递归处理
+- 支持 macOS、Linux 和 Windows x64
+- 支持 npm 和 Homebrew 安装
 
-## ✨ 功能特点
+## npm 安装
 
-- 🖼 批量压缩 JPG / PNG 图片
-- 📉 只压缩不改尺寸（默认行为）
-- 📐 可选生成缩略图（指定尺寸）
-- 📁 支持递归处理子目录
-- ⚡ 基于 libvips，性能优秀
-- 🍺 支持 Homebrew 一行安装
-
----
-
-## 📦 安装方式（macOS）
-
-> 需要已安装 Homebrew
-
-### Homebrew安装
-
-Homebrew 安装建议开启代理，不然可能安装失败。
-
-复制下面命令后在终端执行回车即可：
+需要 Node.js 18 或更高版本：
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
+npm install --global vips-thumbnail
+thumbnail --help
 ```
 
-### 1️⃣ 添加 tap
+也可以不全局安装，直接运行：
+
+```bash
+npx vips-thumbnail --help
+```
+
+### libvips 依赖
+
+Windows x64 用户不需要手动安装。首次执行图片处理时，如果系统中没有 `vips`，工具会自动下载 libvips 8.18.4，校验 SHA-256 后安装到：
+
+```text
+%LOCALAPPDATA%\vips-thumbnail\libvips\8.18.4
+```
+
+帮助命令不会触发下载。已有系统 `vips` 时会优先使用系统版本。
+
+macOS 和 Linux 用户需要先安装 libvips：
+
+```bash
+# macOS
+brew install vips
+
+# Ubuntu / Debian
+sudo apt update
+sudo apt install -y libvips-tools
+```
+
+## Homebrew 安装（macOS）
 
 ```bash
 brew tap giszhc/vips-thumbnail
-```
-
-### 2️⃣ 安装工具
-
-```
 brew install thumbnail
 ```
 
-安装完成后，会得到一个命令：`thumbnail`
+## 使用方法
 
-------
-
-## 🚀 使用方法
-
-```
-thumbnail <源目录> <输出目录> [参数]
+```text
+thumbnail <源路径> <输出路径> [参数]
 ```
 
-------
+只压缩图片，不改变尺寸：
 
-## ⭐ 最常用（推荐）
-
-### 👉 只压缩图片，不改变尺寸
-
-```
+```bash
 thumbnail ./images ./out --quality 80
 ```
 
-含义：
+生成最长边为 400 像素的缩略图：
 
-- 图片尺寸保持不变
-- 压缩质量为 80
-- 文件体积明显减小
-
-这是**最推荐的新手用法**。
-
-------
-
-## 📐 生成缩略图（可选）
-
-```
+```bash
 thumbnail ./images ./out --size 400 --quality 80
 ```
 
-含义：
+处理单张图片：
 
-- 图片最长边缩放到 400
-- 同时按质量 80 压缩
-
-------
-
-## 🧩 参数说明
-
-| 参数                | 说明                                 |
-| ------------------- | ------------------------------------ |
-| `--quality <1-100>` | 压缩质量，默认 85（越小体积越小）    |
-| `--size <数字>`     | 生成缩略图的尺寸（不传则保持原尺寸） |
-| `--ext <.jpg/.png>` | 指定输出格式（可选）                 |
-| `--recursive`       | 递归处理子目录                       |
-| `-h, --help`        | 查看帮助                             |
-
-------
-
-## 📂 示例：递归压缩整个目录
-
+```bash
+thumbnail ./photo.jpg ./out/photo.jpg --quality 80
 ```
+
+递归处理目录：
+
+```bash
 thumbnail ./photos ./compressed --quality 75 --recursive
 ```
 
-------
+## 参数
 
-## 🔧 依赖说明
+| 参数 | 说明 |
+| --- | --- |
+| `--quality <1-100>` | JPG 压缩质量，默认 85 |
+| `--size <数字>` | 最长边尺寸，不传则保持原尺寸 |
+| `--ext <.jpg\|.jpeg\|.png>` | 指定输出格式 |
+| `--recursive` | 递归处理子目录 |
+| `-h, --help` | 显示帮助 |
 
-- `libvips`
-   会由 Homebrew **自动安装**，无需手动处理。
+## 发布
 
-------
+版本号与 Git tag 应保持一致。例如发布 `0.2.3`：
 
-## ❓ 常见问题
+```bash
+npm test
+npm pack --dry-run
+git tag v0.2.3
+git push origin v0.2.3
+```
 
-### Q：不传 `--size` 会发生什么？
+推送 `v*` tag 后，GitHub Actions 会发布 npm 包并更新 Homebrew Formula。仓库需要配置 `NPM_TOKEN` 和 `HOMEBREW_TAP_TOKEN`。
 
-A：图片尺寸保持不变，只进行压缩。
-
-### Q：质量一般设多少？
-
-A：
-
-- 80～85：推荐，肉眼几乎无差别
-- 60～70：体积更小，适合网页
-
-### Q：支持 Windows 吗？
-
-A：当前仅支持 macOS（Homebrew）。
-
-------
-
-## 📄 License
+## License
 
 MIT

@@ -1,6 +1,2 @@
-## 5️⃣ 其他文件
-
-### `.gitignore`
-
-```gitignore
-node_modules
+node_modules/
+*.tgz
